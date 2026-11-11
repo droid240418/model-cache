@@ -69,6 +69,7 @@ final class Runtime
             }
             if ($missing) {
                 $loaded = $this->loader->loadMany($model, array_values($missing));
+                $state?->assertActive();
                 foreach ($missing as $key => $id) {
                     $snapshot = $result[$key] = $loaded[$id];
                     // Do not publish a pre-invalidation load into Redis or the request scope.

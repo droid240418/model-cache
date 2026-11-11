@@ -13,6 +13,7 @@ final class RequestCacheState
     private array $flights = [];
     private int $revision = 0;
     private bool $closed = false;
+    private array $cancelledOwners = [];
     private array $stats = ['hits' => 0, 'loads' => 0, 'waits' => 0, 'invalidations' => 0, 'overflow_bypasses' => 0];
     public array $children = [];
 
@@ -29,6 +30,20 @@ final class RequestCacheState
     private function isClosed(): bool
     {
         return $this->closed;
+    }
+    public function assertActive(): void
+    {
+        if ($this->isClosed()) {
+            throw new \LogicException('Request cache scope is closed.');
+        }
+        if (isset($this->cancelledOwners[Coroutine::id()])) {
+            throw new \RuntimeException('Request cache task was cancelled.');
+        }
+    }
+    public function cancelOwner(int $id): void
+    {
+        $this->cancelledOwners[$id] = true;
+        $this->invalidate();
     }
     public function invalidate(): void
     {
@@ -58,6 +73,7 @@ final class RequestCacheState
     {
         $keys = array_values(array_unique($keys));
         while (true) {
+            $this->assertActive();
             if ($this->isClosed()) {
                 throw new \LogicException('Request cache scope is closed.');
             }
@@ -86,6 +102,7 @@ final class RequestCacheState
                 if ($owned) {
                     ++$this->stats['loads'];
                     $loaded = $loader(array_keys($owned));
+                    $this->assertActive();
                     foreach ($owned as $key => $flight) {
                         if (! array_key_exists($key, $loaded)) {
                             throw new \LogicException('Incomplete entity loader result.');

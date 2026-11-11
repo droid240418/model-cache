@@ -15,6 +15,28 @@ use Psr\Http\Server\RequestHandlerInterface;
 
 final class ScopeLifecycleTest extends TestCase
 {
+    public function testCancelledLoaderDoesNotPublishAndItsWaiterCanRetry(): void
+    {
+        RequestScope::run(function (): void {
+            $ready = new Channel(1);
+            $owner = RequestScope::spawn(fn () => RequestScope::current()->remember('cancel', function () use ($ready): array {
+                $ready->push(true);
+                \Swoole\Coroutine::sleep(1);
+                return ['value' => 'cancelled'];
+            }));
+            $ready->pop();
+            $waiter = RequestScope::spawn(fn () => RequestScope::current()->remember('cancel', static fn () => ['value' => 'fresh']));
+            $owner->cancel();
+            try {
+                $owner->await();
+                self::fail('Cancelled load must fail.');
+            } catch (\RuntimeException $error) {
+                self::assertStringContainsString('cancelled', $error->getMessage());
+            }
+            self::assertSame(['value' => 'fresh'], $waiter->await());
+            self::assertSame(['value' => 'fresh'], RequestScope::current()->remember('cancel', static fn () => []));
+        });
+    }
     public function testFailedOwnerWakesWaitersWhichCanRetry(): void
     {
         $calls = 0;

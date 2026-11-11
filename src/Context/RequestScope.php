@@ -30,7 +30,7 @@ final class RequestScope
         try {
             $result = $callback();
             foreach ($state->children as $child) {
-                $child->await();
+                $child->join();
             }
             return $result;
         } finally {
