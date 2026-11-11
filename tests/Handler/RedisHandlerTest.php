@@ -33,6 +33,13 @@ class RedisHandlerTest extends TestCase
 {
     protected $handler = RedisHandler::class;
 
+    protected function setUp(): void
+    {
+        if (getenv('MODEL_CACHE_INTEGRATION') !== '1') {
+            $this->markTestSkipped('Isolated integration services required.');
+        }
+    }
+
     protected function tearDown(): void
     {
         Mockery::close();

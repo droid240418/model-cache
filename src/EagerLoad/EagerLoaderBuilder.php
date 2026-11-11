@@ -19,6 +19,7 @@ use Hyperf\Database\Model\Collection;
 use Hyperf\Database\Model\Relations\Relation;
 use Hyperf\ModelCache\CacheableInterface;
 
+/** @phpstan-consistent-constructor */
 class EagerLoaderBuilder extends Builder
 {
     protected function eagerLoadRelation(array $models, $name, Closure $constraints)

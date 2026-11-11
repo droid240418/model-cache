@@ -29,6 +29,7 @@ use function Hyperf\Support\make;
 
 class Manager
 {
+    private ?Runtime $runtime = null;
     /**
      * @var HandlerInterface[]
      */
@@ -44,11 +45,30 @@ class Manager
         $this->collector = $container->get(TableCollector::class);
 
         $config = $container->get(ConfigInterface::class);
+        $options = $config->get('model_cache', []);
+        foreach (['context', 'redis'] as $layer) {
+            if (isset($options[$layer]['enabled']) && ! is_bool($options[$layer]['enabled'])) {
+                throw new InvalidArgumentException('model_cache.' . $layer . '.enabled must be a boolean.');
+            }
+        }
+        foreach ($options['models'] ?? [] as $class) {
+            if (! is_string($class) || ! is_subclass_of($class, Model::class)) {
+                throw new InvalidArgumentException('Cache models must be ORM model class names.');
+            }
+        }
+        if ($options['models'] ?? []) {
+            $metadata = $container->get($options['metadata_provider'] ?? \Hyperf\ModelCache\Metadata\MySqlMetadataProvider::class);
+            $scopes = $container->get($options['scope_provider'] ?? \Hyperf\ModelCache\Metadata\SafeScopeProvider::class);
+            $this->runtime = new Runtime($options, new CompleteRowLoader($metadata), $scopes);
+        }
         if (! $config->has('databases')) {
             throw new InvalidArgumentException('config databases is not exist!');
         }
 
         foreach ($config->get('databases') as $key => $item) {
+            if (($options['redis']['enabled'] ?? true) === false || ($item['driver'] ?? 'mysql') === 'manticore') {
+                continue;
+            }
             $handlerClass = $item['cache']['handler'] ?? RedisHandler::class;
             $config = new Config($item['cache'] ?? [], $key);
 
@@ -66,6 +86,12 @@ class Manager
      */
     public function findFromCache($id, string $class): ?Model
     {
+        if ($this->runtime?->supports($class)) {
+            $instance = new $class();
+            $name = \Hyperf\ModelCache\Metadata\ModelConnection::name($instance);
+            $data = $this->runtime->snapshots($instance, [$id], $this->handlers[$name] ?? null);
+            return $data[(string) $id] === null ? null : $instance->newFromBuilder($data[(string) $id]);
+        }
         $instance = new $class();
         $name = $instance->getConnectionName();
         $primaryKey = $instance->getKeyName();
@@ -107,6 +133,21 @@ class Manager
      */
     public function findManyFromCache(array $ids, string $class): Collection
     {
+        if ($this->runtime?->supports($class)) {
+            $instance = new $class();
+            if (! $ids) {
+                return $instance->newCollection();
+            }
+            $name = \Hyperf\ModelCache\Metadata\ModelConnection::name($instance);
+            $data = $this->runtime->snapshots($instance, $ids, $this->handlers[$name] ?? null);
+            $models = [];
+            foreach (array_unique(array_map(strval(...), $ids)) as $id) {
+                if ($data[$id] !== null) {
+                    $models[] = $instance->newFromBuilder($data[$id]);
+                }
+            }
+            return $instance->newCollection($models);
+        }
         if (count($ids) === 0) {
             return new Collection([]);
         }
@@ -169,7 +210,7 @@ class Manager
                 }
             }
 
-            return $instance->hydrate($result);
+            return $instance->newQuery()->hydrate($result);
         }
 
         $this->logger->alert('Cache handler not exist, fetch data from database.');
@@ -183,6 +224,23 @@ class Manager
      */
     public function destroy(iterable $ids, string $class): bool
     {
+        \Hyperf\ModelCache\Context\RequestScope::invalidate();
+        if ($this->runtime?->supports($class)) {
+            $instance = new $class();
+            $ids = is_array($ids) ? $ids : iterator_to_array($ids);
+            if ($instance->getConnection()->transactionLevel() > 0) {
+                TransactionState::defer(\Hyperf\ModelCache\Metadata\ModelConnection::name($instance), $class, $ids);
+                return true;
+            }
+            $handler = $this->handlers[\Hyperf\ModelCache\Metadata\ModelConnection::name($instance)] ?? null;
+            if (! $handler || ! $ids) {
+                return true;
+            }
+            $keys = array_map(fn ($id) => $this->runtime->redisKey($instance, (string) $id, $handler->getConfig()), $ids);
+            // DEL=0 means already absent; cleanup is idempotently successful.
+            $handler->deleteMultiple($keys);
+            return true;
+        }
         $instance = new $class();
         $name = $instance->getConnectionName();
 
@@ -207,6 +265,9 @@ class Manager
      */
     public function increment($id, $column, $amount, string $class): bool
     {
+        if ($this->runtime?->supports($class)) {
+            return $this->destroy([$id], $class);
+        }
         $instance = new $class();
         $name = $instance->getConnectionName();
 
@@ -282,6 +343,9 @@ class Manager
 
     protected function defaultValue(mixed $handler, mixed $primaryValue): array
     {
+        if ($handler instanceof \Hyperf\ModelCache\Handler\CompleteSnapshotHandler) {
+            return [];
+        }
         if ($handler instanceof DefaultValueInterface) {
             return $handler->defaultValue($primaryValue);
         }

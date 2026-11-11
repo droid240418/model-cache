@@ -1,0 +1,62 @@
+name: CI
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.2', '8.3', '8.4', '8.5']
+        mysql: ['8.4', '9.7']
+    services:
+      mysql:
+        image: mysql:${{ matrix.mysql }}
+        env:
+          MYSQL_ROOT_PASSWORD: model_cache_isolated_test
+          MYSQL_ROOT_HOST: '%'
+          MYSQL_DATABASE: model_cache_test
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -pmodel_cache_isolated_test"
+          --health-interval=5s --health-timeout=3s --health-retries=30
+      redis:
+        image: redis:8
+        ports: ['6379:6379']
+    env:
+      MODEL_CACHE_INTEGRATION: '1'
+      MC_TEST_MYSQL_PORT: '3306'
+      MC_TEST_MYSQL_PASSWORD: model_cache_isolated_test
+      MC_TEST_REDIS_PORT: '6379'
+      MC_TEST_CLUSTER_SEEDS: 127.0.0.1:16380,127.0.0.1:16381,127.0.0.1:16382
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: pdo_mysql, redis, swoole, mbstring, dom, xml, sockets
+          ini-values: swoole.use_shortname=Off
+          tools: composer:v2
+          coverage: none
+      - name: Resolve test tools for this PHP version
+        run: composer update --no-interaction --prefer-dist --no-progress --no-plugins --no-scripts
+      - run: composer validate --strict
+      - run: composer analyse -- --no-progress
+      - name: Start isolated three-master Redis Cluster
+        run: sh bin/start-cluster.sh
+      - run: composer test
+      - name: Real HTTP request scopes in both Swoole modes
+        run: python3 bin/check-server.py
+      - name: Show startup diagnostics on failure
+        if: failure()
+        run: find runtime -maxdepth 1 -name 'server-*.log' -type f -exec cat {} +
+      - name: Remove isolated cluster
+        if: always()
+        run: docker rm --force model-cache-test-cluster || true

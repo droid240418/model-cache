@@ -1,6 +1,6 @@
 {
     "name": "hyperf/model-cache",
-    "description": "A model cache component for hyperf.",
+    "description": "Hyperf ModelCache fork with request-scoped snapshots, Redis cache and safe invalidation.",
     "license": "MIT",
     "keywords": [
         "php",
@@ -9,8 +9,8 @@
     ],
     "homepage": "https://hyperf.io",
     "support": {
-        "issues": "https://github.com/hyperf/hyperf/issues",
-        "source": "https://github.com/hyperf/hyperf",
+        "issues": "https://github.com/droid240418/model-cache/issues",
+        "source": "https://github.com/droid240418/model-cache",
         "docs": "https://hyperf.wiki",
         "pull-request": "https://github.com/hyperf/hyperf/pulls"
     },
@@ -23,7 +23,8 @@
         "hyperf/db-connection": "~3.2.0",
         "hyperf/support": "~3.2.0",
         "psr/container": "^1.0 || ^2.0",
-        "psr/simple-cache": "^1.0 || ^2.0 || ^3.0"
+        "psr/simple-cache": "^1.0 || ^2.0 || ^3.0",
+        "psr/http-server-middleware": "^1.0"
     },
     "suggest": {
         "hyperf/event": "Required to use DeleteCacheListener."
@@ -48,5 +49,21 @@
         "hyperf": {
             "config": "Hyperf\\ModelCache\\ConfigProvider"
         }
+    },
+    "require-dev": {
+        "hyperf/config": "~3.2.0",
+        "hyperf/event": "~3.2.0",
+        "hyperf/redis": "~3.2.0",
+        "hyperf/framework": "~3.2.0",
+        "mockery/mockery": "^1.6",
+        "phpunit/phpunit": "^10.5 || ^11.5",
+        "phpstan/phpstan": "^2.0",
+        "hyperf/testing": "~3.2.0"
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "scripts": {
+        "test": "co-phpunit --prepend tests/bootstrap.php --colors=always",
+        "analyse": "phpstan analyse --memory-limit=512M"
     }
 }

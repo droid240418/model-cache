@@ -1,0 +1,9 @@
+parameters:
+    level: 5
+    treatPhpDocTypesAsCertain: false
+    bootstrapFiles:
+        - tests/analysis-bootstrap.php
+    paths:
+        - src
+        - tests/Support/TestEntity.php
+    tmpDir: runtime/phpstan

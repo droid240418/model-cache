@@ -21,6 +21,18 @@ use Hyperf\ModelCache\Builder as ModelCacheBuilder;
 
 trait Cacheable
 {
+    /** Force a database refresh and invalidate both cache layers. */
+    public function refresh()
+    {
+        $this->deleteCache();
+        return parent::refresh();
+    }
+
+    public function fresh($with = [])
+    {
+        $this->deleteCache();
+        return parent::fresh(...func_get_args());
+    }
     protected bool $useCacheBuilder = false;
 
     /**
@@ -75,6 +87,7 @@ trait Cacheable
      */
     public function increment($column, $amount = 1, array $extra = [])
     {
+        \Hyperf\ModelCache\Context\RequestScope::invalidate();
         $res = parent::increment($column, $amount, $extra);
         if ($res > 0) {
             if ($this->getConnection()->transactionLevel() && $this instanceof CacheableInterface) {
@@ -100,6 +113,7 @@ trait Cacheable
      */
     public function decrement($column, $amount = 1, array $extra = [])
     {
+        \Hyperf\ModelCache\Context\RequestScope::invalidate();
         $res = parent::decrement($column, $amount, $extra);
         if ($res > 0) {
             if ($this->getConnection()->transactionLevel() && $this instanceof CacheableInterface) {

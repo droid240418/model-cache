@@ -23,7 +23,7 @@ use Psr\Container\ContainerInterface;
 
 use function Hyperf\Support\make;
 
-class RedisStringHandler implements HandlerInterface
+class RedisStringHandler implements HandlerInterface, CompleteSnapshotHandler
 {
     use InteractsWithTime;
 

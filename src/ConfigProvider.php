@@ -21,10 +21,17 @@ class ConfigProvider
     {
         return [
             'listeners' => [
+                \Hyperf\ModelCache\Listener\RequestCacheListener::class,
                 DeleteCacheListener::class,
                 DeleteCacheInTransactionListener::class,
             ],
             'publish' => [
+                [
+                    'id' => 'model-cache-runtime',
+                    'description' => 'Request entity cache and complete row loading.',
+                    'source' => __DIR__ . '/../publish/model_cache.php',
+                    'destination' => BASE_PATH . '/config/autoload/model_cache.php',
+                ],
                 [
                     'id' => 'config',
                     'description' => 'The config for database with model-cache.',

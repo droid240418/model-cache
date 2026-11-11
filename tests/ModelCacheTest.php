@@ -52,6 +52,9 @@ class ModelCacheTest extends TestCase
 
     protected function setUp(): void
     {
+        if (getenv('MODEL_CACHE_INTEGRATION') !== '1') {
+            $this->markTestSkipped('Isolated integration services required.');
+        }
         $this->channel = new Channel(999);
     }
 

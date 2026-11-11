@@ -54,6 +54,9 @@ class ContainerStub
 {
     public static function mockContainer($ttl = 86400, ?callable $listenQueryExecuted = null)
     {
+        if (getenv('MODEL_CACHE_INTEGRATION') !== '1') {
+            throw new \LogicException('Upstream fixtures require isolated integration services.');
+        }
         $container = Mockery::mock(Container::class);
         $container->shouldReceive('get')->with(TableCollector::class)->andReturn(new TableCollector());
 
@@ -79,9 +82,10 @@ class ContainerStub
                 'default' => [
                     'driver' => 'mysql',
                     'host' => '127.0.0.1',
-                    'database' => 'hyperf',
+                    'database' => 'model_cache_test',
+                    'port' => (int) (getenv('MC_TEST_MYSQL_PORT') ?: 13306),
                     'username' => 'root',
-                    'password' => '',
+                    'password' => getenv('MC_TEST_MYSQL_PASSWORD') ?: '',
                     'charset' => 'utf8',
                     'collation' => 'utf8_unicode_ci',
                     'prefix' => '',
@@ -109,7 +113,7 @@ class ContainerStub
                 'default' => [
                     'host' => '127.0.0.1',
                     'auth' => null,
-                    'port' => 6379,
+                    'port' => (int) (getenv('MC_TEST_REDIS_PORT') ?: 16379),
                     'db' => 0,
                     'pool' => [
                         'min_connections' => 1,

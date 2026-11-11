@@ -6,6 +6,20 @@ on:
 
 name: Release
 
+permissions:
+  contents: read
+
 jobs:
-  release:
-    uses: hyperf/.github/.github/workflows/release.yml@master
+  validate-tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          tools: composer:v2
+          coverage: none
+      - run: composer validate --strict
+      - run: echo 'Composer VCS distribution uses the reviewed Git tag; no upstream publishing workflow is called.'
