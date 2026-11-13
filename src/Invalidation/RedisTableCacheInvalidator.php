@@ -46,6 +46,8 @@ final class RedisTableCacheInvalidator
             if (! $client instanceof \Redis && ! $client instanceof \RedisCluster) {
                 throw new \InvalidArgumentException('Cleanup needs a native Redis/RedisCluster client for every pool.');
             }
+            if ((string) $client->getOption(\Redis::OPT_PREFIX) !== '') { throw new \InvalidArgumentException('Cache cleanup requires a dedicated Redis client without OPT_PREFIX.'); }
+            if ($client instanceof \Redis && ! $client->isConnected()) { throw new \RedisException('Redis cache cleanup client is not connected.'); }
             $pattern = sprintf($template, $target['prefix'], $target['table'], $target['primary_key'], '*');
             $nodes = $client instanceof \RedisCluster ? $client->_masters() : [null];
             if (! $nodes) {
@@ -59,9 +61,12 @@ final class RedisTableCacheInvalidator
             foreach ($nodes as $node) {
                 $cursor = null;
                 do {
+                    $client->clearLastError();
                     $keys = $client instanceof \RedisCluster
                         ? $client->scan($cursor, $node, $pattern, $this->batchSize)
                         : $client->scan($cursor, $pattern, $this->batchSize);
+                    $scanError = (string) $client->getLastError();
+                    if ($scanError !== '') { throw new \RedisException('Redis cache SCAN failed: ' . $scanError); }
                     foreach ($keys ?: [] as $key) {
                         try {
                             $count = $this->unlink($client, $key);
